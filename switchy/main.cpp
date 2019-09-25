@@ -1,15 +1,16 @@
 #include <Windows.h>
-
-using namespace std;
+#include <version.h>
 
 HHOOK hHook = 0;
+bool isWindows10 = GetRealOSVersion().dwMajorVersion >= 10;
+bool wasPressed = false;
 
 LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 	if (nCode == HC_ACTION) {
 		KBDLLHOOKSTRUCT* p = (KBDLLHOOKSTRUCT*)lParam;
 
 		if (p->vkCode == VK_CAPITAL) {
-			if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
+			if (wParam == WM_KEYDOWN) {
 				if (GetKeyState(VK_CAPITAL)) {
 					UnhookWindowsHookEx(hHook);
 					keybd_event(VK_CAPITAL, 0x3a, 0, 0);
@@ -17,10 +18,24 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 					hHook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, 0, 0);
 				}
 				
-				HWND hWnd = GetForegroundWindow();
-				if (hWnd) {
-					hWnd = GetAncestor(hWnd, GA_ROOTOWNER);
-					PostMessage(hWnd, WM_INPUTLANGCHANGEREQUEST, 0, (LPARAM)HKL_NEXT);
+				if (isWindows10 && !wasPressed) {
+					wasPressed = true;
+					keybd_event(VK_LWIN, 0x3a, 0, 0);
+					keybd_event(VK_SPACE, 0x3a, 0, 0);
+				}
+			}
+
+			if (wParam == WM_KEYUP) {
+				if (isWindows10) {
+					keybd_event(VK_LWIN, 0x3a, KEYEVENTF_KEYUP, 0);
+					keybd_event(VK_SPACE, 0x3a, KEYEVENTF_KEYUP, 0);
+					wasPressed = false;
+				} else {
+					HWND hWnd = GetForegroundWindow();
+					if (hWnd) {
+						hWnd = GetAncestor(hWnd, GA_ROOTOWNER);
+						PostMessage(hWnd, WM_INPUTLANGCHANGEREQUEST, 0, (LPARAM)HKL_NEXT);
+					}
 				}
 			}
 
