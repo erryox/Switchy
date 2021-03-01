@@ -77,7 +77,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 int main(int argc, char* argv[]) {
 	popup = GetOSVersion() >= 10;
 	if (argc > 1) {
-		if (argv[1] != "nopopup") popup = false;
+		if (argv[1] == "nopopup") popup = false;
 	}
 
 	HANDLE hMutex = CreateMutex(0, 0, "Switchy");
