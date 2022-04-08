@@ -83,10 +83,8 @@ DWORD GetOSVersion() {
 
 
 void ToggleCapsLockState() {
-	UnhookWindowsHookEx(hHook);
 	keybd_event(VK_CAPITAL, 0x3A, 0, 0);
 	keybd_event(VK_CAPITAL, 0x3A, KEYEVENTF_KEYUP, 0);
-	hHook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, 0, 0);
 #if _DEBUG
 	printf("Caps Lock state has been toggled\n");
 #endif // _DEBUG
