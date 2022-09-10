@@ -38,7 +38,7 @@ int main(int argc, char** argv)
 		settings.popup = GetOSVersion() >= 10;
 	}
 #if _DEBUG
-	printf("Pop-up %s\n", settings.popup ? "enabled" : "disabled");
+	printf("Pop-up is %s\n", settings.popup ? "enabled" : "disabled");
 #endif
 
 	HANDLE hMutex = CreateMutex(0, 0, "Switchy");
@@ -146,6 +146,13 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 					winPressed = FALSE;
 					ReleaseKey(VK_LWIN);
 				}
+				
+				if (enabled && !settings.popup) {
+					PressKey(VK_MENU);
+					PressKey(VK_LSHIFT);
+					ReleaseKey(VK_MENU);
+					ReleaseKey(VK_LSHIFT);
+				}
 			}
 
 			if (!enabled)
@@ -170,15 +177,6 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 						PressKey(VK_SPACE);
 						ReleaseKey(VK_SPACE);
 						winPressed = TRUE;
-					}
-					else
-					{
-						HWND hWnd = GetForegroundWindow();
-						if (hWnd)
-						{
-							hWnd = GetAncestor(hWnd, GA_ROOTOWNER);
-							PostMessage(hWnd, WM_INPUTLANGCHANGEREQUEST, 0, (LPARAM)HKL_NEXT);
-						}
 					}
 				}
 			}
