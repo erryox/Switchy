@@ -37,6 +37,7 @@ int main(int argc, char** argv)
 	else
 	{
 		settings.popup = GetOSVersion() >= 10;
+		//settings.popup = FALSE;
 	}
 #if _DEBUG
 	printf("Pop-up is %s\n", settings.popup ? "enabled" : "disabled");
@@ -148,11 +149,18 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 					ReleaseKey(VK_LWIN);
 				}
 
-				if (enabled && !settings.popup) {
-					PressKey(VK_MENU);
-					PressKey(VK_LSHIFT);
-					ReleaseKey(VK_MENU);
-					ReleaseKey(VK_LSHIFT);
+				if (enabled && !settings.popup)
+				{
+					if (!keystrokeShiftProcessed) {
+						PressKey(VK_MENU);
+						PressKey(VK_LSHIFT);
+						ReleaseKey(VK_MENU);
+						ReleaseKey(VK_LSHIFT);
+					}
+					else
+					{
+						keystrokeShiftProcessed = FALSE;
+					}
 				}
 			}
 
@@ -187,7 +195,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 		else if (key->vkCode == VK_LSHIFT)
 		{
 
-			if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP)
+			if ((wParam == WM_KEYUP || wParam == WM_SYSKEYUP) && !keystrokeCapsProcessed)
 			{
 				keystrokeShiftProcessed = FALSE;
 			}
@@ -204,10 +212,18 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 				if (keystrokeCapsProcessed == TRUE)
 				{
 					ToggleCapsLockState();
-					return 1;
+					if (settings.popup)
+					{
+						PressKey(VK_LWIN);
+						PressKey(VK_SPACE);
+						ReleaseKey(VK_SPACE);
+						winPressed = TRUE;
+					}
+
+					return 0;
 				}
 			}
-			return 1;
+			return 0;
 		}
 	}
 
