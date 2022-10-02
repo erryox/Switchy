@@ -18,7 +18,6 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam);
 
 
 HHOOK hHook;
-BOOL enabled = TRUE;
 BOOL keystrokeCapsProcessed = FALSE;
 BOOL keystrokeShiftProcessed = FALSE;
 BOOL winPressed = FALSE;
@@ -30,15 +29,15 @@ Settings settings = {
 
 int main(int argc, char** argv)
 {
-	if (argc > 1 && strcmp(argv[1], "nopopup") == 0)
+	if (argc > 1 && strcmp(argv[1], "showpopup") != 0)
 	{
-		settings.popup = FALSE;
+		settings.popup = GetOSVersion() >= 10;
 	}
 	else
 	{
-		settings.popup = GetOSVersion() >= 10;
-		//settings.popup = FALSE;
+		settings.popup = FALSE;
 	}
+
 #if _DEBUG
 	printf("Pop-up is %s\n", settings.popup ? "enabled" : "disabled");
 #endif
@@ -129,15 +128,6 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 #endif // _DEBUG
 		if (key->vkCode == VK_CAPITAL)
 		{
-			if (wParam == WM_SYSKEYDOWN && !keystrokeCapsProcessed)
-			{
-				keystrokeCapsProcessed = TRUE;
-				enabled = !enabled;
-#if _DEBUG
-				printf("Switchy has been %s\n", enabled ? "enabled" : "disabled");
-#endif // _DEBUG
-				return 1;
-			}
 
 			if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP)
 			{
@@ -149,7 +139,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 					ReleaseKey(VK_LWIN);
 				}
 
-				if (enabled && !settings.popup)
+				if (!settings.popup)
 				{
 					if (!keystrokeShiftProcessed) {
 						PressKey(VK_MENU);
@@ -162,11 +152,6 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 						keystrokeShiftProcessed = FALSE;
 					}
 				}
-			}
-
-			if (!enabled)
-			{
-				return CallNextHookEx(hHook, nCode, wParam, lParam);
 			}
 
 			if (wParam == WM_KEYDOWN && !keystrokeCapsProcessed)
@@ -198,11 +183,6 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 			if ((wParam == WM_KEYUP || wParam == WM_SYSKEYUP) && !keystrokeCapsProcessed)
 			{
 				keystrokeShiftProcessed = FALSE;
-			}
-
-			if (!enabled)
-			{
-				return CallNextHookEx(hHook, nCode, wParam, lParam);
 			}
 
 			if (wParam == WM_KEYDOWN && !keystrokeShiftProcessed)
