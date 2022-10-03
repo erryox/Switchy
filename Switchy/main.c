@@ -19,7 +19,8 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam);
 
 HHOOK hHook;
 BOOL enabled = TRUE;
-BOOL keystrokeProcessed = FALSE;
+BOOL keystrokeCapsProcessed = FALSE;
+BOOL keystrokeShiftProcessed = FALSE;
 BOOL winPressed = FALSE;
 
 Settings settings = {
@@ -127,9 +128,9 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 #endif // _DEBUG
 		if (key->vkCode == VK_CAPITAL)
 		{
-			if (wParam == WM_SYSKEYDOWN && !keystrokeProcessed)
+			if (wParam == WM_SYSKEYDOWN && !keystrokeCapsProcessed)
 			{
-				keystrokeProcessed = TRUE;
+				keystrokeCapsProcessed = TRUE;
 				enabled = !enabled;
 #if _DEBUG
 				printf("Switchy has been %s\n", enabled ? "enabled" : "disabled");
@@ -139,19 +140,26 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 
 			if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP)
 			{
-				keystrokeProcessed = FALSE;
+				keystrokeCapsProcessed = FALSE;
 
 				if (winPressed)
 				{
 					winPressed = FALSE;
 					ReleaseKey(VK_LWIN);
 				}
-				
-				if (enabled && !settings.popup) {
-					PressKey(VK_MENU);
-					PressKey(VK_LSHIFT);
-					ReleaseKey(VK_MENU);
-					ReleaseKey(VK_LSHIFT);
+
+				if (enabled && !settings.popup)
+				{
+					if (!keystrokeShiftProcessed) {
+						PressKey(VK_MENU);
+						PressKey(VK_LSHIFT);
+						ReleaseKey(VK_MENU);
+						ReleaseKey(VK_LSHIFT);
+					}
+					else
+					{
+						keystrokeShiftProcessed = FALSE;
+					}
 				}
 			}
 
@@ -160,11 +168,11 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 				return CallNextHookEx(hHook, nCode, wParam, lParam);
 			}
 
-			if (wParam == WM_KEYDOWN && !keystrokeProcessed)
+			if (wParam == WM_KEYDOWN && !keystrokeCapsProcessed)
 			{
-				keystrokeProcessed = TRUE;
+				keystrokeCapsProcessed = TRUE;
 
-				if (GetKeyState(VK_LSHIFT) & 0x8000)
+				if (keystrokeShiftProcessed == TRUE)
 				{
 					ToggleCapsLockState();
 					return 1;
@@ -180,8 +188,41 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 					}
 				}
 			}
-
 			return 1;
+		}
+
+		else if (key->vkCode == VK_LSHIFT)
+		{
+
+			if ((wParam == WM_KEYUP || wParam == WM_SYSKEYUP) && !keystrokeCapsProcessed)
+			{
+				keystrokeShiftProcessed = FALSE;
+			}
+
+			if (!enabled)
+			{
+				return CallNextHookEx(hHook, nCode, wParam, lParam);
+			}
+
+			if (wParam == WM_KEYDOWN && !keystrokeShiftProcessed)
+			{
+				keystrokeShiftProcessed = TRUE;
+
+				if (keystrokeCapsProcessed == TRUE)
+				{
+					ToggleCapsLockState();
+					if (settings.popup)
+					{
+						PressKey(VK_LWIN);
+						PressKey(VK_SPACE);
+						ReleaseKey(VK_SPACE);
+						winPressed = TRUE;
+					}
+
+					return 0;
+				}
+			}
+			return 0;
 		}
 	}
 
