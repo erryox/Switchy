@@ -1,231 +1,150 @@
 #include <Windows.h>
+
 #if _DEBUG
 #include <stdio.h>
-#endif // _DEBUG
+
+#define LOG(...) printf(__VA_ARGS__)
+#else
+#define LOG(...)
+#endif
 
 typedef NTSTATUS(WINAPI* RtlGetVersionPtr)(PRTL_OSVERSIONINFOW);
 
-typedef struct {
-	BOOL popup;
-} Settings;
-
-void ShowError(LPCSTR message);
-DWORD GetOSVersion();
-void PressKey(int keyCode);
-void ReleaseKey(int keyCode);
-void ToggleCapsLockState();
-LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam);
-
-
 HHOOK hHook;
 BOOL enabled = TRUE;
-BOOL keystrokeCapsProcessed = FALSE;
-BOOL keystrokeShiftProcessed = FALSE;
-BOOL winPressed = FALSE;
+BOOL appSwitchRequired = FALSE;
+BOOL capsLockSwitchRequired = FALSE;
+BOOL capsLockProcessed = FALSE;
+BOOL shiftProcessed = FALSE;
 
-Settings settings = {
-	.popup = FALSE
-};
-
-
-int main(int argc, char** argv)
-{
-	if (argc > 1 && strcmp(argv[1], "nopopup") == 0)
-	{
-		settings.popup = FALSE;
-	}
-	else
-	{
-		settings.popup = GetOSVersion() >= 10;
-	}
-#if _DEBUG
-	printf("Pop-up is %s\n", settings.popup ? "enabled" : "disabled");
-#endif
-
-	HANDLE hMutex = CreateMutex(0, 0, "Switchy");
-	if (GetLastError() == ERROR_ALREADY_EXISTS)
-	{
-		ShowError("Another instance of Switchy is already running!");
-		return 1;
-	}
-
-	hHook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, 0, 0);
-	if (hHook == NULL)
-	{
-		ShowError("Error calling \"SetWindowsHookEx(...)\"");
-		return 1;
-	}
-
-	MSG messages;
-	while (GetMessage(&messages, NULL, 0, 0))
-	{
-		TranslateMessage(&messages);
-		DispatchMessage(&messages);
-	}
-
-	UnhookWindowsHookEx(hHook);
-
-	return 0;
+void ShowError(LPCSTR message) {
+  MessageBox(NULL, message, "Error", MB_OK | MB_ICONERROR);
 }
 
-
-void ShowError(LPCSTR message)
-{
-	MessageBox(NULL, message, "Error", MB_OK | MB_ICONERROR);
+void PressKey(WORD keyCode) {
+  INPUT input = {
+    .type = INPUT_KEYBOARD,
+    .ki.wVk = keyCode,
+    .ki.dwFlags = 0
+  };
+  SendInput(1, &input, sizeof(INPUT));
 }
 
-
-DWORD GetOSVersion()
-{
-	HMODULE hMod = GetModuleHandleW(L"ntdll.dll");
-	RTL_OSVERSIONINFOW osvi = { 0 };
-
-	if (hMod)
-	{
-		RtlGetVersionPtr p = (RtlGetVersionPtr)GetProcAddress(hMod, "RtlGetVersion");
-
-		if (p)
-		{
-			osvi.dwOSVersionInfoSize = sizeof(osvi);
-			p(&osvi);
-		}
-	}
-
-	return osvi.dwMajorVersion;
+void ReleaseKey(WORD keyCode) {
+  INPUT input = {
+    .type = INPUT_KEYBOARD,
+    .ki.wVk = keyCode,
+    .ki.dwFlags = KEYEVENTF_KEYUP  
+  };
+  SendInput(1, &input, sizeof(INPUT));
 }
 
-
-void PressKey(int keyCode)
-{
-	keybd_event(keyCode, 0, 0, 0);
+void SwitchCapsLockState() {
+  PressKey(VK_CAPITAL);
+  ReleaseKey(VK_CAPITAL);
+  LOG("Caps Lock state has been switched\n");
 }
 
-
-void ReleaseKey(int keyCode)
-{
-	keybd_event(keyCode, 0, KEYEVENTF_KEYUP, 0);
+void SetCapsLockProcessed(BOOL value) {
+  capsLockProcessed = value;
 }
 
-
-void ToggleCapsLockState()
-{
-	PressKey(VK_CAPITAL);
-	ReleaseKey(VK_CAPITAL);
-#if _DEBUG
-	printf("Caps Lock state has been toggled\n");
-#endif // _DEBUG
+void SetShiftProcessed(BOOL value) {
+  shiftProcessed = value;
 }
 
-
-LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
-{
-	KBDLLHOOKSTRUCT* key = (KBDLLHOOKSTRUCT*)lParam;
-	if (nCode == HC_ACTION && !(key->flags & LLKHF_INJECTED))
-	{
-#if _DEBUG
-		const char* keyStatus = (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) ? "pressed" : "released";
-		printf("Key %d has been %s\n", key->vkCode, keyStatus);
-#endif // _DEBUG
-		if (key->vkCode == VK_CAPITAL)
-		{
-			if (wParam == WM_SYSKEYDOWN && !keystrokeCapsProcessed)
-			{
-				keystrokeCapsProcessed = TRUE;
-				enabled = !enabled;
-#if _DEBUG
-				printf("Switchy has been %s\n", enabled ? "enabled" : "disabled");
-#endif // _DEBUG
-				return 1;
-			}
-
-			if (wParam == WM_KEYUP || wParam == WM_SYSKEYUP)
-			{
-				keystrokeCapsProcessed = FALSE;
-
-				if (winPressed)
-				{
-					winPressed = FALSE;
-					ReleaseKey(VK_LWIN);
-				}
-
-				if (enabled && !settings.popup)
-				{
-					if (!keystrokeShiftProcessed)
-					{
-						PressKey(VK_MENU);
-						PressKey(VK_LSHIFT);
-						ReleaseKey(VK_MENU);
-						ReleaseKey(VK_LSHIFT);
-					}
-					else
-					{
-						keystrokeShiftProcessed = FALSE;
-					}
-				}
-			}
-
-			if (!enabled)
-			{
-				return CallNextHookEx(hHook, nCode, wParam, lParam);
-			}
-
-			if (wParam == WM_KEYDOWN && !keystrokeCapsProcessed)
-			{
-				keystrokeCapsProcessed = TRUE;
-
-				if (keystrokeShiftProcessed == TRUE)
-				{
-					ToggleCapsLockState();
-					return 1;
-				}
-				else
-				{
-					if (settings.popup)
-					{
-						PressKey(VK_LWIN);
-						PressKey(VK_SPACE);
-						ReleaseKey(VK_SPACE);
-						winPressed = TRUE;
-					}
-				}
-			}
-			return 1;
-		}
-
-		else if (key->vkCode == VK_LSHIFT)
-		{
-
-			if ((wParam == WM_KEYUP || wParam == WM_SYSKEYUP) && !keystrokeCapsProcessed)
-			{
-				keystrokeShiftProcessed = FALSE;
-			}
-
-			if (!enabled)
-			{
-				return CallNextHookEx(hHook, nCode, wParam, lParam);
-			}
-
-			if (wParam == WM_KEYDOWN && !keystrokeShiftProcessed)
-			{
-				keystrokeShiftProcessed = TRUE;
-
-				if (keystrokeCapsProcessed == TRUE)
-				{
-					ToggleCapsLockState();
-					if (settings.popup)
-					{
-						PressKey(VK_LWIN);
-						PressKey(VK_SPACE);
-						ReleaseKey(VK_SPACE);
-						winPressed = TRUE;
-					}
-
-					return 0;
-				}
-			}
-			return 0;
-		}
-	}
-
-	return CallNextHookEx(hHook, nCode, wParam, lParam);
+void SetAppSwitchRequired(BOOL value) {
+  appSwitchRequired = value;
 }
+
+void SetCapsLockSwitchRequired(BOOL value) {
+  capsLockSwitchRequired = value;
+}
+
+LRESULT CALLBACK HandleKeyboardEvent(int nCode, WPARAM wParam, LPARAM lParam) {
+  KBDLLHOOKSTRUCT* key = (KBDLLHOOKSTRUCT*)lParam;
+  if (nCode == HC_ACTION && !(key->flags & LLKHF_INJECTED)) {
+    if (key->vkCode == VK_CAPITAL) {
+      if (wParam == WM_SYSKEYDOWN) {
+        SetAppSwitchRequired(TRUE);
+        SetCapsLockProcessed(TRUE);
+        return 1;
+      }
+
+      if (wParam == WM_SYSKEYUP || (wParam == WM_KEYUP && appSwitchRequired)) {
+        enabled = !enabled;
+        SetAppSwitchRequired(FALSE);
+        SetCapsLockProcessed(FALSE);
+        LOG("Switchy has been %s\n", enabled ? "enabled" : "disabled");
+        return 1;
+      }
+
+      if (wParam == WM_KEYDOWN) {
+        SetCapsLockProcessed(TRUE);
+        if (enabled) {
+          if (shiftProcessed) {
+            SetCapsLockSwitchRequired(TRUE);
+          }
+          return 1;
+        }
+      } else if (wParam == WM_KEYUP) {
+        SetCapsLockProcessed(FALSE);
+        if (enabled) {
+          if (shiftProcessed || capsLockSwitchRequired) {
+            SwitchCapsLockState();
+            SetCapsLockSwitchRequired(FALSE);
+          } else {
+            PressKey(VK_MENU);
+            PressKey(VK_LSHIFT);
+            ReleaseKey(VK_MENU);
+            ReleaseKey(VK_LSHIFT);
+          }
+          return 1;
+        }
+      }
+    } else if (key->vkCode == 164) {
+      if (wParam == WM_SYSKEYDOWN && capsLockProcessed) {
+        SetAppSwitchRequired(TRUE);
+      }
+    } else if (key->vkCode == VK_LSHIFT) {
+      if (wParam == WM_KEYDOWN) {
+        SetShiftProcessed(TRUE);
+        if (capsLockProcessed) {
+          SetCapsLockSwitchRequired(TRUE);
+        }
+      } else if (wParam == WM_KEYUP) {
+        SetShiftProcessed(FALSE);
+      }
+    }
+  }
+
+  return CallNextHookEx(NULL, nCode, wParam, lParam);
+}
+
+int main() {
+  HANDLE hMutex = CreateMutex(0, 0, "Switchy");
+  if (GetLastError() == ERROR_ALREADY_EXISTS) {
+    ShowError("Another instance of Switchy is already running!");
+    return 1;
+  }
+
+  hHook = SetWindowsHookEx(WH_KEYBOARD_LL, HandleKeyboardEvent, 0, 0);
+  if (hHook == NULL) {
+    ShowError("Error calling 'SetWindowsHookEx'");
+    return 1;
+  }
+
+  MSG messages;
+  while (GetMessage(&messages, NULL, 0, 0)) {
+    TranslateMessage(&messages);
+    DispatchMessage(&messages);
+  }
+
+  UnhookWindowsHookEx(hHook);
+  if (hMutex) {
+    ReleaseMutex(hMutex);
+  }
+
+  return 0;
+}
+
