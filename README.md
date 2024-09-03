@@ -1,4 +1,8 @@
 # Switchy
+
+> [!WARNING]
+> At the moment, I have neither the time nor the inclination to support this program. If you have any issues with the stable version, you can try one of the preview builds in [this issue](https://github.com/erryox/Switchy/issues/14). Some bugs should be fixed in it, but there are other issues as well, which is why it’s a preview build. Feel free to fork this repo if you’d like to make any changes or improvements!
+
 Switches keyboard layout with the Caps Lock key.
 
 Just put [Switchy.exe](https://github.com/erryox/Switchy/releases/latest) in the startup folder (to open it press **Win+R** and type **shell:startup**).  
